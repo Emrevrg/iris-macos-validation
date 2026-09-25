@@ -1,0 +1,28 @@
+[build-system]
+requires = ["setuptools>=61"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "iris-engine"
+version = "0.2.0"
+description = "IRIS — kayıpsız (bit-birebir) dağıtık model motoru: herhangi bir modeli bellek bütçesi altında çalıştır"
+readme = "README.md"
+requires-python = ">=3.9"
+license = { text = "Apache-2.0" }
+authors = [{ name = "Norovox Labs" }]
+keywords = ["llm", "inference", "lossless", "distributed", "sharding", "airllm", "colibri"]
+dependencies = [
+  "torch>=2.1",
+  "transformers>=4.44",   # sürüm-robust: rotary_emb kendi sınıfından yeniden örneklenir → bit-birebir
+  "accelerate>=0.30",
+  "safetensors>=0.4",
+  "huggingface_hub>=0.23",
+  "requests>=2.28",       # source="hub": diske yazmadan HTTP Range akisi
+]
+
+[project.scripts]
+iris = "iris.cli:main"
+
+[tool.setuptools]
+packages = ["iris"]
+package-dir = { iris = "." }

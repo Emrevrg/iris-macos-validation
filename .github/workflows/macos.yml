@@ -1,0 +1,27 @@
+name: IRIS macOS bit-exact validation
+on:
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  validate:
+    runs-on: macos-latest
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: pip
+          cache-dependency-path: iris/pyproject.toml
+      - name: Install IRIS and runtime dependencies
+        run: python -m pip install --upgrade pip && python -m pip install ./iris
+      - name: Run full reference bit-exact verification
+        run: python run_macos_validation.py
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: iris-macos-validation
+          path: iris_macos_validation.json
+          if-no-files-found: error
+          retention-days: 14
