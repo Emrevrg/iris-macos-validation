@@ -1,6 +1,8 @@
-name: IRIS macOS bit-exact validation
+﻿name: IRIS macOS bit-exact validation
 on:
   workflow_dispatch:
+  push:
+    branches: [main]
 permissions:
   contents: read
 jobs:

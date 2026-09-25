@@ -314,7 +314,9 @@ class IrisModel:
         self.src = {"hub": HubSource, "ram": RamSource}.get(source, LocalSource)(model_id)
         self.source = source
         if prefetch is None:
-            prefetch = 16 if source == "hub" else 2
+            # olculdu (iris2_verify): CPU'da yerel prefetch hesapla yarisip yavaslatir (6,26 s vs
+            # 7,12 s); GPU'da kopya/hesap ortusur; hub'da ag gecikmesini gizler
+            prefetch = 16 if source == "hub" else (2 if self.device != "cpu" else 0)
 
         with init_empty_weights():
             self.model = AutoModelForCausalLM.from_config(self.cfg)
@@ -513,11 +515,19 @@ class IrisModel:
         return self.tok(prompt, return_tensors="pt").input_ids
 
     # --- genel API ---
-    def forward_logits(self, input_ids, past_key_values=None):
+    def forward_logits(self, input_ids, past_key_values=None, last_only=False):
+        """last_only=True: lm_head yalniz son pozisyonda (HF generate'in yaptigi gibi,
+        logits_to_keep=1) -> ayni GEMM sekli -> GPU'da da referansla bit-birebir."""
         torch = self.torch
+        kw = {}
+        if last_only:
+            import inspect
+            sig = inspect.signature(self.model.forward).parameters
+            kw = {"logits_to_keep": 1} if "logits_to_keep" in sig else \
+                ({"num_logits_to_keep": 1} if "num_logits_to_keep" in sig else {})
         with torch.no_grad():
             out = self.model(input_ids.to(self.device), past_key_values=past_key_values,
-                             use_cache=past_key_values is not None)
+                             use_cache=past_key_values is not None, **kw)
         self.peak_gb = max(self.peak_gb, round(_rss_gb(), 3))
         return out.logits
 
@@ -533,7 +543,7 @@ class IrisModel:
         b0, t0 = self.src.bytes_read, time.time()
         t_first = None
         for _ in range(max_new_tokens):
-            logits = self.forward_logits(cur, past_key_values=cache)[:, -1].float().cpu()
+            logits = self.forward_logits(cur, past_key_values=cache, last_only=True)[:, -1].float().cpu()
             if t_first is None:
                 t_first = time.time() - t0
             if return_logits:
@@ -594,9 +604,13 @@ def _ref_greedy(model, ids, n, device, eos):
     import torch
     from transformers import DynamicCache
     cache, cur, gen, steps = DynamicCache(), ids, [], []
+    import inspect
+    sig = inspect.signature(model.forward).parameters
+    kw = {"logits_to_keep": 1} if "logits_to_keep" in sig else \
+        ({"num_logits_to_keep": 1} if "num_logits_to_keep" in sig else {})
     with torch.no_grad():
         for _ in range(n):
-            lg = model(cur.to(device), past_key_values=cache, use_cache=True).logits[:, -1].float().cpu()
+            lg = model(cur.to(device), past_key_values=cache, use_cache=True, **kw).logits[:, -1].float().cpu()
             steps.append(lg[0])
             nxt = int(lg.argmax(-1))
             gen.append(nxt)
