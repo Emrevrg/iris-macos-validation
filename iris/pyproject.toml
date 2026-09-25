@@ -1,10 +1,10 @@
-[build-system]
+﻿[build-system]
 requires = ["setuptools>=61"]
 build-backend = "setuptools.build_meta"
 
 [project]
 name = "iris-engine"
-version = "0.2.0"
+version = "0.1.0"
 description = "IRIS — kayıpsız (bit-birebir) dağıtık model motoru: herhangi bir modeli bellek bütçesi altında çalıştır"
 readme = "README.md"
 requires-python = ">=3.9"

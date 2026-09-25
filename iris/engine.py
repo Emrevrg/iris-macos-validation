@@ -1,8 +1,8 @@
-"""IRIS engine — kayipsiz katman/tensor akisi ile HF causal-LM'lerini sinirli bellekte
+﻿"""IRIS engine — kayipsiz katman/tensor akisi ile HF causal-LM'lerini sinirli bellekte
 calistirir. Model bitleri atilmaz: agirliklar (yerel safetensors VEYA dogrudan Hub'dan HTTP
 Range ile) katman katman / dilim dilim okunur, kullanilinca birakilir.
 
-v0.2:
+Ozellikler:
   * KV-cache'li uretim (token basina O(1) hesap, prompt yeniden hesaplanmaz)
   * prefetch: sonraki katman/dilim arka planda okunur (I/O ile hesap ortusur)
   * tensor_shards=N: her Linear N satir-dilimine bolunur (kolon-paralel), her dilim ayri

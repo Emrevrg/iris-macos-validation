@@ -1,4 +1,4 @@
----
+﻿---
 license: apache-2.0
 library_name: iris-engine
 pipeline_tag: text-generation
@@ -15,7 +15,7 @@ language:
   - en
 ---
 
-# IRIS — kayıpsız dağıtık model motoru (v0.2)
+# IRIS — kayıpsız dağıtık model motoru
 
 **Herhangi bir HF modelini, bellek bütçesi altında, bit-birebir (kayıpsız) çalıştır.**
 Model bitleri hiç atılmaz; ağırlıklar katman katman / dilim dilim akıtılır, kullanılınca
@@ -67,7 +67,7 @@ params = m.add_lora(rank=8, targets=("q_proj", "v_proj"))
 loss = m.loss(ids); loss.backward()
 ```
 
-## Ölçülen kanıtlar (v0.2, hepsi bulutta koşuldu, JSON artefaktlı)
+## Ölçülen kanıtlar (hepsi bulutta koşuldu, JSON artefaktlı)
 
 **Bit-kesinlik** (Kaggle CPU; 4 istem × tüm pozisyonlar + KV-cache'li 8 adım üretim; referans =
 `transformers.from_pretrained` tam model):
@@ -88,7 +88,7 @@ loss = m.loss(ids); loss.backward()
 logit farkı **0.0**, tokenlar birebir. Adım gecikmesi p50 **0,54 s**, p95 **0,69 s**; GPU'da yerleşik
 **0,81 GB** (model 6,17 GB). Token başına tüm model PCIe'den akar — ~12 GB/s, veriyolu sınırında.
 
-**Hız (KV-cache, v0.1 → v0.2)**: 0.5B'de **2,4×**, 7B'de (12 token) **4,3×** hızlanma. 7B CPU'da
+**Hız (KV-cache'siz ilk yol → KV-cache'li yol)**: 0.5B'de **2,4×**, 7B'de (12 token) **4,3×** hızlanma. 7B CPU'da
 IRIS 3,3 GB RAM ile 26,6 s; tam model (17 GB RAM) 16,3 s.
 
 **Akış üzerinden ince ayar + optimizer kaldığı-yerden-devam** (Qwen2.5-0.5B, LoRA r=8, 3 ayrı
@@ -102,7 +102,33 @@ süreç): 6. adımda kes → kaydet → yeni süreçte devam; kesintisiz koşuyl
 | Qwen2.5-7B | 15,2 GB | 1,78 GB RAM | 8,5× | ✓ 0.0 |
 | Qwen2.5-14B | 29,5 GB | 2,63 GB RAM | 11,2× | ✓ |
 | Qwen2.5-32B | 65,5 GB | 2,63 GB RAM | 24,9× | ✓ |
-| Qwen2.5-14B, **T4 GPU** | 29,5 GB | **0,72 GB VRAM** | **41×** | referans karşılaştırması sürüyor |
+| Qwen2.5-14B, **T4 GPU** (15,6 GB) | 29,5 GB | **0,72 GB VRAM** | **41×** | ✓ 0.0 (referans aynı makinenin 2×T4'ünde) |
+| **Qwen2.5-72B, diske yazmadan Hub'dan**, 32 dilim | 145,4 GB | **1,71 GB RAM** | **85×** | ✓ 0.0 (dilim ↔ katman modu, 912 K logit) |
+
+**Veri merkezi kapasitesi** (aynı Kaggle makinesi, 2×T4): IRIS 29,5 GB'lık 14B'yi **tek** T4'te
+0,72 GB tepe VRAM ile koşar; standart `transformers` referansı modeli tutmak için **iki** T4'ü de
+kullanır. 8 adım greedy üretim ve 70 token kalite metninde logit farkı **0.0**, perplexity birebir
+(3,1157). Hız dürüstçe: IRIS 0,0097 tok/s (her token 29,5 GB diskten akar), referans 1,47 tok/s.
+
+## Kayıpsız fiziksel paket (61 GiB, kaynaksız ve ağsız geri yükleme)
+
+Qwen2.5-32B (commit sabit, 27 dosya, 65,5 GB) Hub'dan **akıtılarak** (kaynak hiç diske yazılmadan)
+bf16 bayt-düzlemi + zstd ile paketlendi: **46,7 GB (0,713×)**, 25 volume, 4 ayrı kernel'ın kalıcı
+çıktısında. Geri yükleme **interneti kapalı** ayrı bir makinede (farklı ağ ad-alanı, prob engelli):
+**27/27 dosya SHA-256 birebir** (Hub LFS özetleriyle de), 25 volume SHA doğrulandı, bit-çevrilmiş
+volume hem volume SHA'sında hem parça SHA'sında **reddedildi**.
+
+## Platformlar (ölçülen)
+
+| platform | kanıt |
+|---|---|
+| **Linux** (Kaggle x86_64, CPU + T4 GPU) | tüm modlar bit-birebir (yukarıdaki tablolar) |
+| **Windows 10** (x86_64, CPU) | normal · low_mem · 4 shard · low_mem+4 shard · Hub akışı → 5/5 **0.0**, her biri 11,2 M logit |
+| macOS | CI hazır; GitHub hesabı ödeme kilidi nedeniyle koşturulamadı |
+
+Katı kabul denetimi (`scripts/iris_acceptance.py`, fail-closed): **6/7** — bütünlük, fiziksel
+paket, görülmemiş istemde kesin gecikme, GGUF/MoE/multimodal uyumluluk, ince ayar + devam,
+veri-merkezi kapasitesi GEÇTİ; yalnız macOS ölçümü eksik.
 
 ## Neden AirLLM/Colibri yerine
 
